@@ -1,0 +1,33 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  imageName: 'zossama/node-express-hello-world'
+  tag: '$(Build.BuildId)'
+
+steps:
+- task: Docker@2
+  displayName: 'Build and push Docker image'
+  inputs:
+    command: buildAndPush
+    repository: $(imageName)
+    dockerfile: '**/Dockerfile'
+    containerRegistry: 'dockerHubServiceConnection'  # You must create this service connection in Azure DevOps
+    tags: |
+      $(tag)
+
+- task: DownloadSecureFile@1
+  name: kubeconfig
+  inputs:
+    secureFile: 'kubeconfig' # The name of the secure file you uploaded
+
+- script: |
+    kubectl --kubeconfig $(kubeconfig.secureFilePath) set image deployment/node-express-hello-world node-express-hello-world=$(imageName):$(tag) --record
+    kubectl --kubeconfig $(kubeconfig.secureFilePath) rollout status deployment/node-express-hello-world
+  displayName: 'Update Kubernetes deployment'
+  env:
+    KUBECONFIG: $(kubeconfig.secureFilePath)
+
